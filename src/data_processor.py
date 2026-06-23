@@ -2,10 +2,57 @@ import pandas as pd
 class NetworkDataProcessor():
     def __init__(self):
         self.df = None
+
+    def read_trace(self, f):
+        next = f.readline()
+        tokens = next.split()
+        site = tokens[0]
+        next = f.readline()
+        tokens = next.split()
+        time = tokens[1]
+        next = f.readline()
+        tokens = next.split()
+        src = " ".join(tokens[6:])
+        next = f.readline()
+        tokens = next.split()
+        dest = " ".join(tokens[1:])
+        f.readline()
+        f.readline()
+        next = f.readline()
+        hop_numbers = []
+        hop_ips = []
+        hop_rtt = []
+        while len(next) > 1:
+            tokens = next.split()
+            # print(tokens)
+            hop_numbers.append(tokens[0])
+            hop_rtt.append(tokens[1])
+            hop_ips.append(tokens[2])
+            next = f.readline()
+        # print('Returning...')
+        return (site, time, src, dest, hop_numbers, hop_ips, hop_rtt)
+
+
     def load_file(self, file_path: str) -> bool:
         try:
             # Adjust separation (sep) based on your file format (e.g., '\t', ',', or spaces)
-            self.df = pd.read_csv(filepath, sep=None, engine='python')
+            # self.df = pd.read_csv(filepath, sep=None, engine='python')
+            with open(file_path, "r") as f:
+                f.readline()
+                next = f.readline()
+                tokens = next.split()
+                count = tokens[0]
+                f.readline()
+                f.readline()
+                done = False
+                while not done:
+                    # next = f.readline()
+                    tup = self.read_trace(f)
+                    # print(tup)
+                    if not f.readline():
+                        done = True
+
+                
             return True
         except Exception as e:
             print(f"Error loading file: {e}")
