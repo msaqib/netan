@@ -2,6 +2,7 @@ import pandas as pd
 class NetworkDataProcessor():
     def __init__(self):
         self.df = None
+        self.data = []
 
     def read_trace(self, f):
         next = f.readline()
@@ -37,6 +38,7 @@ class NetworkDataProcessor():
         try:
             # Adjust separation (sep) based on your file format (e.g., '\t', ',', or spaces)
             # self.df = pd.read_csv(filepath, sep=None, engine='python')
+            data = []
             with open(file_path, "r") as f:
                 f.readline()
                 next = f.readline()
@@ -49,6 +51,7 @@ class NetworkDataProcessor():
                     # next = f.readline()
                     tup = self.read_trace(f)
                     # print(tup)
+                    self.data.append(tup)
                     if not f.readline():
                         done = True
 
@@ -59,7 +62,8 @@ class NetworkDataProcessor():
             return False
     def get_all_data(self) -> pd.DataFrame:
         """Returns the complete dataset."""
-        return self.df if self.df is not None else pd.DataFrame()
+        # return self.df if self.df is not None else pd.DataFrame()
+        return self.data
 
     def filter_data(self, search_term: str, column_name: str = None) -> pd.DataFrame:
         """Filters rows containing the search term."""
