@@ -1,12 +1,11 @@
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QMessageBox
 from views.load_view import LoadView
 from views.dashboard_view import DashboardView
-from data_processor import NetworkDataProcessor
+from data_processor import FileLoaderWorker
 
 class MainWindow(QMainWindow):
-    def __init__(self, processor: NetworkDataProcessor):
+    def __init__(self):
         super().__init__()
-        self.processor = processor
         self.setWindowTitle("Network Analyzer")
         self.resize(900, 650)
 
@@ -26,13 +25,26 @@ class MainWindow(QMainWindow):
         self.load_view.file_selected.connect(self.handle_file_loading)
 
     def handle_file_loading(self, file_path: str):
-        # We invoke your data processor (which we will build later)
-        success = self.processor.load_file(file_path)
+
+        # 1. Switch views to the dashboard instantly so the user sees updates live
+        self.stacked_widget.setCurrentIndex(1)
+        self.dashboard_view.clear_dashboard()
         
-        if success:
-            # Transition smoothly to the dashboard layout view
-            self.stacked_widget.setCurrentIndex(1)
-            # Update dashboard view table with data
-            self.dashboard_view.update_display(self.processor.get_all_data())
-        else:
-            QMessageBox.critical(self, "Error", "Failed to parse custom network file format.")
+        # 2. Instantiate our background thread worker
+        self.worker = FileLoaderWorker(file_path)
+        
+        from PyQt6.QtCore import Qt
+        self.worker.record_parsed.connect(
+            self.dashboard_view.append_single_record, 
+            Qt.ConnectionType.QueuedConnection
+        )
+        self.worker.finished_loading.connect(self.on_loading_complete)
+
+        # 4. Start the thread!
+        self.worker.start()
+    
+    def on_loading_complete(self):
+        # Optional housecleaning once the entire file finishes streaming
+        self.dashboard_view.lbl_target.setText("Select a record to view details")
+        # Clean up the thread object safely
+        self.worker.deleteLater()

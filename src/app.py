@@ -2,7 +2,6 @@ import sys
 import qdarktheme
 from PyQt6.QtWidgets import QApplication
 from main_window import MainWindow
-from data_processor import NetworkDataProcessor
 
 def main():
     app = QApplication(sys.argv)
@@ -11,8 +10,7 @@ def main():
     qdarktheme.setup_theme("dark")
     
     # Initialize components
-    processor = NetworkDataProcessor()
-    window = MainWindow(processor)
+    window = MainWindow()
     
     window.show()
     sys.exit(app.exec())

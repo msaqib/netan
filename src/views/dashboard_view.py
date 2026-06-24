@@ -59,8 +59,16 @@ class DashboardView(QWidget):
         self.splitter.addWidget(self.detail_container)
         self.splitter.setSizes([300, 600])
 
+    def clear_dashboard(self):
+        """Resets the dashboard view before a fresh file streaming starts."""
+        self.all_records.clear()
+        self.master_list.clear()
+        self.hop_table.setRowCount(0)
+        self.lbl_target.setText("Loading data stream...")
+
     def update_display(self, data_tuples):
         """Called by MainWindow controller once data is fully parsed and ready."""
+        self.clear_dashboard()
         self.all_records = data_tuples
         self.populate_list(self.all_records)
 
@@ -110,7 +118,7 @@ class DashboardView(QWidget):
         # Re-derive record directly from what's currently showing in master list
         if query:
             # Reconstruct quick runtime map fallback
-            filtered_list = [r for r in self.all_records if query in r[0].lower() or query in query in r[2].lower() or query in r[3].lower()]
+            filtered_list = [r for r in self.all_records if query in r[0].lower() or query in r[2].lower() or query in r[3].lower()]
             record = filtered_list[current_list_idx]
 
         # 1. Update Header text strings
@@ -155,3 +163,20 @@ class DashboardView(QWidget):
             self.hop_table.setItem(row_idx, 2, ip_item)
 
         self.hop_table.resizeColumnsToContents()
+    def append_single_record(self, record: tuple):
+        """Appends a single newly-parsed record to the master list live."""
+        try:
+            # 1. Store it in our local memory state tracking array
+            self.all_records.append(record)
+            
+            # 2. Add it directly to the UI list widget
+            idx = len(self.all_records) - 1
+            location = record[2].split()[-1] if record[2] else "Unknown"
+            display_text = f"🌐 {record[0]}\n📅 {record[1][:10]} | 📍 {location}"
+            
+            list_item = QListWidgetItem(display_text)
+            list_item.setData(Qt.ItemDataRole.UserRole, idx) 
+            self.master_list.addItem(list_item)
+        except Exception as e:
+            # This ensures silent thread errors are forced into your console
+            print(f"❌ Error rendering incoming record: {e}")
