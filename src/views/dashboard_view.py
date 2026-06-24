@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QSplitter, QListWidget, QListWidgetItem, QLabel, QFrame
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QSplitter, QListWidget, QListWidgetItem, QLabel, QFrame, QComboBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
@@ -6,40 +6,47 @@ class DashboardView(QWidget):
     def __init__(self):
         super().__init__()
         self.all_records = []
+        self.known_sites = set()
         self.init_ui()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
 
         # Search bar setup
-        search_layout = QHBoxLayout()
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Filter data (IP, payload, headers, logs)...")
-        self.search_input.textChanged.connect(self.filter_records)
-        search_layout.addWidget(self.search_input)
-        main_layout.addLayout(search_layout)
+        filter_layout = QHBoxLayout()
 
-        # 2. Main Body Splitter (Left: List, Right: Details)
+        # 1. Text Search Input
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filter data (IP, operator, logs)...")
+        self.search_input.textChanged.connect(self.filter_records)
+        filter_layout.addWidget(self.search_input, stretch=2)
+
+        # 🚀 2. Site Dropdown Selector
+        self.site_dropdown = QComboBox()
+        self.site_dropdown.addItem("All Sites")  # Default placeholder option
+        self.site_dropdown.currentTextChanged.connect(self.filter_records) # Trigger filter on change
+        filter_layout.addWidget(self.site_dropdown, stretch=1)
+
+        main_layout.addLayout(filter_layout)
+
+        # --- Main Body Splitter (Left: List, Right: Details) ---
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(self.splitter)
 
-        # --- LEFT PANEL: Master List ---
+        # Left List Pane
         self.master_list = QListWidget()
         self.master_list.itemSelectionChanged.connect(self.display_selected_details)
         self.splitter.addWidget(self.master_list)
 
-        # --- RIGHT PANEL: Detail View ---
+        # Right Detail Container (Metadata + Table)
         self.detail_container = QWidget()
         self.detail_layout = QVBoxLayout(self.detail_container)
-        self.detail_layout.setContentsMargins(15, 0, 0, 0) # Pad slightly from the splitter line
+        self.detail_layout.setContentsMargins(15, 0, 0, 0)
 
-        # Summary Metadata Cards
         self.lbl_target = QLabel("Select a record to view details")
         self.lbl_target.setStyleSheet("font-size: 18px; font-weight: bold; color: #1fb6ff;")
-        
         self.lbl_meta = QLabel("")
         self.lbl_meta.setStyleSheet("font-size: 12px; color: #aaaaaa; margin-bottom: 5px;")
-        
         self.lbl_dest = QLabel("")
         self.lbl_dest.setStyleSheet("font-size: 13px; font-weight: 500; margin-bottom: 15px;")
         self.lbl_dest.setWordWrap(True)
@@ -48,23 +55,30 @@ class DashboardView(QWidget):
         self.detail_layout.addWidget(self.lbl_meta)
         self.detail_layout.addWidget(self.lbl_dest)
 
-        # Hops Detail Table
         self.hop_table = QTableWidget()
         self.hop_table.setColumnCount(3)
         self.hop_table.setHorizontalHeaderLabels(["Hop", "RTT (ms)", "IP Address"])
         self.hop_table.horizontalHeader().setStretchLastSection(True)
         self.detail_layout.addWidget(self.hop_table)
 
-        # Add right panel to splitter and set initial proportional widths (e.g., 35% left, 65% right)
         self.splitter.addWidget(self.detail_container)
         self.splitter.setSizes([300, 600])
 
     def clear_dashboard(self):
-        """Resets the dashboard view before a fresh file streaming starts."""
+        """Resets the dashboard view and locks the filter controls."""
         self.all_records.clear()
         self.master_list.clear()
+        self.known_sites.clear()
+        
+        self.site_dropdown.clear()
+        self.site_dropdown.addItem("All Sites")
+        
+        # 🔒 Lock controls so user cannot click them while data streams in
+        self.search_input.setEnabled(False)
+        self.site_dropdown.setEnabled(False)
+        
         self.hop_table.setRowCount(0)
-        self.lbl_target.setText("Loading data stream...")
+        self.lbl_target.setText("Loading data stream... Please wait.")
 
     def update_display(self, data_tuples):
         """Called by MainWindow controller once data is fully parsed and ready."""
@@ -73,28 +87,40 @@ class DashboardView(QWidget):
         self.populate_list(self.all_records)
 
     def populate_list(self, records):
-        """Helper to safely build out list entries using the layout items."""
+        """Helper to cleanly rebuild the master list view based on filtered subsets."""
         self.master_list.clear()
-        for idx, record in enumerate(records):
-            # Format list card label string using Domain, Source, and Timestamp
-            display_text = f"🌐 {record[0]}\n📅 {record[1][:10]} | 📍 {record[2].split()[-1]}"
-            
-            list_item = QListWidgetItem(display_text)
-            # Stash the original index configuration reference inside the list item data
-            list_item.setData(Qt.ItemDataRole.UserRole, idx) 
-            self.master_list.addItem(list_item)
+        for record in records:
+            # Re-map the filtered items back to their original position index in self.all_records
+            try:
+                original_idx = self.all_records.index(record)
+                location = record[2].split()[-1] if record[2] else "Unknown"
+                display_text = f"🌐 {record[0]}\n📅 {record[1][:10]} | 📍 {location}"
+                
+                list_item = QListWidgetItem(display_text)
+                list_item.setData(Qt.ItemDataRole.UserRole, original_idx) 
+                self.master_list.addItem(list_item)
+            except ValueError:
+                continue
 
     def filter_records(self):
-        """Triggers local search match loops over existing tuple collections."""
-        query = self.search_input.text().lower()
-        if not query:
-            self.populate_list(self.all_records)
-            return
+        """Triggers multi-criteria filtering combining search text and dropdown state."""
+        text_query = self.search_input.text().lower()
+        selected_site = self.site_dropdown.currentText()
 
         filtered = []
         for r in self.all_records:
-            # Search across Target URL, Source details, or Destination info fields
-            if query in r[0].lower() or query in r[2].lower() or query in r[3].lower():
+            # 1. Evaluate Text Search constraint
+            match_text = not text_query or (
+                text_query in r[0].lower() or 
+                text_query in r[2].lower() or 
+                text_query in r[3].lower()
+            )
+            
+            # 2. Evaluate Dropdown selection constraint
+            match_dropdown = (selected_site == "All Sites") or (r[0] == selected_site)
+
+            # Combined boolean filter matrix evaluation
+            if match_text and match_dropdown:
                 filtered.append(r)
         
         self.populate_list(filtered)
@@ -164,12 +190,17 @@ class DashboardView(QWidget):
 
         self.hop_table.resizeColumnsToContents()
     def append_single_record(self, record: tuple):
-        """Appends a single newly-parsed record to the master list live."""
+        """Appends incoming records sequentially to the UI without active filter checks."""
         try:
-            # 1. Store it in our local memory state tracking array
             self.all_records.append(record)
             
-            # 2. Add it directly to the UI list widget
+            # Extract unique sites for the dropdown options behind the scenes
+            site_name = record[0]
+            if site_name and site_name not in self.known_sites:
+                self.known_sites.add(site_name)
+                self.site_dropdown.addItem(site_name)
+
+            # Draw every item to the list sequentially during the stream
             idx = len(self.all_records) - 1
             location = record[2].split()[-1] if record[2] else "Unknown"
             display_text = f"🌐 {record[0]}\n📅 {record[1][:10]} | 📍 {location}"
@@ -177,6 +208,12 @@ class DashboardView(QWidget):
             list_item = QListWidgetItem(display_text)
             list_item.setData(Qt.ItemDataRole.UserRole, idx) 
             self.master_list.addItem(list_item)
+                
         except Exception as e:
-            # This ensures silent thread errors are forced into your console
             print(f"❌ Error rendering incoming record: {e}")
+
+    def unlock_ui(self):
+        """Called when file reading is 100% complete to restore control interaction."""
+        self.search_input.setEnabled(True)
+        self.site_dropdown.setEnabled(True)
+        self.lbl_target.setText("Select a record to view details")

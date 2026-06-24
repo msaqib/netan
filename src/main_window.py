@@ -46,5 +46,6 @@ class MainWindow(QMainWindow):
     def on_loading_complete(self):
         # Optional housecleaning once the entire file finishes streaming
         self.dashboard_view.lbl_target.setText("Select a record to view details")
+        self.dashboard_view.unlock_ui()
         # Clean up the thread object safely
         self.worker.deleteLater()
