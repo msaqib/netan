@@ -7,6 +7,7 @@ class DashboardView(QWidget):
         super().__init__()
         self.all_records = []
         self.known_sites = set()
+        self.known_cities = set()
         self.init_ui()
 
     def init_ui(self):
@@ -26,6 +27,12 @@ class DashboardView(QWidget):
         self.site_dropdown.addItem("All Sites")  # Default placeholder option
         self.site_dropdown.currentTextChanged.connect(self.filter_records) # Trigger filter on change
         filter_layout.addWidget(self.site_dropdown, stretch=1)
+
+        # 🚀 2.1 City Dropdown Selector
+        self.city_dropdown = QComboBox()
+        self.city_dropdown.addItem("All cities")  # Default placeholder option
+        self.city_dropdown.currentTextChanged.connect(self.filter_records) # Trigger filter on change
+        filter_layout.addWidget(self.city_dropdown, stretch=1)
 
         main_layout.addLayout(filter_layout)
 
@@ -69,13 +76,18 @@ class DashboardView(QWidget):
         self.all_records.clear()
         self.master_list.clear()
         self.known_sites.clear()
+        self.known_cities.clear()
         
         self.site_dropdown.clear()
         self.site_dropdown.addItem("All Sites")
+
+        self.city_dropdown.clear()
+        self.city_dropdown.addItem("All Cities")
         
         # 🔒 Lock controls so user cannot click them while data streams in
         self.search_input.setEnabled(False)
         self.site_dropdown.setEnabled(False)
+        self.city_dropdown.setEnabled(False)
         
         self.hop_table.setRowCount(0)
         self.lbl_target.setText("Loading data stream... Please wait.")
@@ -106,6 +118,7 @@ class DashboardView(QWidget):
         """Triggers multi-criteria filtering combining search text and dropdown state."""
         text_query = self.search_input.text().lower()
         selected_site = self.site_dropdown.currentText()
+        selected_city = self.city_dropdown.currentText()
 
         filtered = []
         for r in self.all_records:
@@ -116,11 +129,15 @@ class DashboardView(QWidget):
                 text_query in r[3].lower()
             )
             
+            match_site = (selected_site == "All Sites") or (r[0] == selected_site)
+            rec_city = r[2].split()[-1] if r[2] else "Unknown"
+            match_city = (selected_city == "All Cities") or (rec_city == selected_city)
+
             # 2. Evaluate Dropdown selection constraint
             match_dropdown = (selected_site == "All Sites") or (r[0] == selected_site)
 
             # Combined boolean filter matrix evaluation
-            if match_text and match_dropdown:
+            if match_text and match_site and match_city:
                 filtered.append(r)
         
         self.populate_list(filtered)
@@ -200,6 +217,11 @@ class DashboardView(QWidget):
                 self.known_sites.add(site_name)
                 self.site_dropdown.addItem(site_name)
 
+            city_name = record[2].split()[-1] if record[2] else "Unknown"
+            if city_name and city_name not in self.known_cities:
+                self.known_cities.add(city_name)
+                self.city_dropdown.addItem(city_name)
+
             # Draw every item to the list sequentially during the stream
             idx = len(self.all_records) - 1
             location = record[2].split()[-1] if record[2] else "Unknown"
@@ -216,4 +238,5 @@ class DashboardView(QWidget):
         """Called when file reading is 100% complete to restore control interaction."""
         self.search_input.setEnabled(True)
         self.site_dropdown.setEnabled(True)
+        self.city_dropdown.setEnabled(True)
         self.lbl_target.setText("Select a record to view details")
